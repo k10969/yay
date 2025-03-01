@@ -1,36 +1,42 @@
+import yaylib
 import random
 import time
 import os
-from yaylib import Client  # 非公式APIが必要な場合
 
-# 環境変数からアカウント情報を取得
-accounts = [
-    {'email': os.getenv('YAY_EMAIL_1'), 'password': os.getenv('YAY_PASSWORD_1')},
-    {'email': os.getenv('YAY_EMAIL_2'), 'password': os.getenv('YAY_PASSWORD_2')}
-]
+# アカウント情報（環境変数から取得）
+EMAIL = os.getenv('YAY_EMAIL')
+PASSWORD = os.getenv('YAY_PASSWORD')
 
-# 投稿内容のリスト
+# 投稿内容リスト（ランダムに選択）
 posts = [
-    "おはよう！",
-    "最近ハマってることがあるの",
-    "今日も頑張ろう！",
-    "ねぇ、これ知ってる？",
-    "やばい、ちょっと楽しいかも"
+    "今日は何しようかな",
+    "最近楽しいことが増えた",
+    "暇だな～誰か話そ？",
+    "何か面白いことないかな",
+    "ちょっとドキドキしてる…"
 ]
 
-# クライアントのリスト
-clients = []
+# クライアントログイン
+client = yaylib.Client()
+client.login(EMAIL, PASSWORD)
 
-# 各アカウントでログイン
-for account in accounts:
-    client = Client()
-    client.login(account['email'], account['password'])
-    clients.append(client)
-
-# 30分ごとに自動投稿
 while True:
-    for client in clients:
+    try:
+        # ランダムに投稿を選択
         post_content = random.choice(posts)
         client.create_post(post_content)
         print(f'投稿しました: {post_content}')
-    time.sleep(1800)  # 30分待機
+        
+        # 次の投稿までランダムな待機時間（30～60分）
+        delay = random.randint(1800, 3600)
+        print(f"次の投稿まで {delay} 秒待機")
+        time.sleep(delay)
+    
+    except yaylib.errors.HTTPError as e:
+        if "429" in str(e):
+            wait_time = random.randint(600, 1800)  # 10〜30分待機
+            print(f"429エラー: {wait_time} 秒待機して再試行")
+            time.sleep(wait_time)
+        else:
+            print(f"エラー発生: {e}")
+            break  # 予期しないエラーなら停止
