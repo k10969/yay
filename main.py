@@ -2,20 +2,29 @@ import yaylib
 import random
 import time
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
+import pytz
 
-# 環境変数からアカウント情報を取得
+print("🚀 スクリプト開始")
+
+# 日本時間（JST）のタイムゾーン設定
+jst = pytz.timezone('Asia/Tokyo')
+
+# 環境変数からアカウント情報を取得（例: "email1:password1,email2:password2"）
 account_list = os.getenv('YAY_ACCOUNTS', '').split(',')
 
-# ログイン情報のリスト作成
+# ログイン情報リスト作成
 accounts = []
 for account in account_list:
     parts = account.split(':')
     if len(parts) == 2:
         accounts.append({'email': parts[0], 'password': parts[1]})
 
-# 各時間帯の投稿リスト（1時間ごとに8個）
-hourly_posts = {
+print("取得したアカウント情報:", accounts)
+
+# 各時間帯の投稿内容（1時間ごとに8個の候補）
+# ※必要に応じて7〜22時も同様に記述してください。
+post_texts = {
     1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない", "誰か電話しない？", "コンビニ行きたい",
         "夜中のラーメンは最強", "眠れない人いる〜？", "そろそろ寝ないと", "明日起きれるかな…"],
     2: ["深夜組集合〜！", "もうそろそろ寝ないと", "YouTube見てたらこんな時間", "小腹すいたなぁ…",
@@ -59,30 +68,38 @@ hourly_posts = {
     24: ["こんな時間まで起きてる人いる？", "そろそろ寝る準備しよ〜", "だれか電話しませんか", "楽しいことしよー"]
 }
 
-# 4回に1回、投稿の最後に付ける文章
-dm_message = " だれかDMしませんか、フォローもお願いします！"
+# 0時は通常の24時として扱うので、post_texts[0] はそのまま利用可能です。
 
-# 指定された時間帯の投稿リストからランダムに4つ選ぶ
+# 4回に1回、投稿の最後に追加するDM誘導文
+dm_text = " だれかDMしませんか、フォローもお願いします！"
+
+# 時間帯に応じた投稿をランダムに取得（4個選んで、4回に1回DM誘導を追加）
 def get_time_based_posts():
-    now = datetime.now().hour
-    posts = hourly_posts.get(now, ["なにしてるの〜？💬", "ちょっとおしゃべりしたい💖"])
+    current_hour = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst).hour
+    if current_hour == 0:
+        current_hour = 24  # 0時は24時として扱う
 
+    print(f"現在の時刻（JST）: {current_hour} 時")  # デバッグ用
+
+    posts = post_texts.get(current_hour, ["なにしてるの〜？💬", "ちょっとおしゃべりしたい💖"])
     if not posts:
-        print("⚠️ 投稿する内容がありません！デフォルトメッセージを使用します。")
+        print("⚠️ 投稿する内容がありません！")
         return ["なにしてるの〜？💬"]
 
+    # 4個の投稿をランダムに選ぶ（候補数が4未満の場合はそのまま）
     selected_posts = random.sample(posts, min(4, len(posts)))
 
     for i in range(len(selected_posts)):
         if random.randint(1, 4) == 1:
-            selected_posts[i] += dm_message
+            selected_posts[i] += dm_text
 
     return selected_posts
 
-# ログイン処理
+# ログイン処理（各アカウントごとに10～30秒の待機を挟む）
 yay_clients = []
 for account in accounts:
     try:
+        time.sleep(random.randint(10, 30))
         client = yaylib.Client()
         client.login(account["email"], account["password"])
         yay_clients.append(client)
@@ -90,45 +107,65 @@ for account in accounts:
     except Exception as e:
         print(f"❌ {account['email']} のログインに失敗: {e}")
 
-# ログイン成功したアカウント数を確認
 if len(yay_clients) == 0:
     print("⚠️ ログイン成功したアカウントがありません。処理を終了します。")
     exit()
 
-# メインの投稿ループ
+print(f"ログイン成功したアカウント数: {len(yay_clients)}")
+
+# 🚀 ビルド完了後すぐにテスト投稿を実施
+for client in yay_clients:
+    try:
+        test_post = get_time_based_posts()[0]
+        print(f"テスト投稿内容（{client.email}）: {test_post}")
+        response = client.create_post(test_post)
+        print(f"✅ 初回テスト投稿成功 ({client.email}): {response}")
+    except Exception as e:
+        print(f"❌ 初回テスト投稿失敗 ({client.email}): {e}")
+
+# 🎯 メインの投稿ループ（15分ごと）
 while True:
     try:
-        client = random.choice(yay_clients)
-        posts = get_time_based_posts()
+        now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst)
+        current_minute = now.minute
 
-        if not posts:
-            print("⚠️ 投稿する内容がないため、スキップします。")
-            time.sleep(900)
-            continue
+        # 次の投稿タイミングを計算（0分, 15分, 30分, 45分）
+        next_post_minute = (current_minute // 15 + 1) * 15
+        if next_post_minute >= 60:
+            next_post_minute = 0
+            next_time = now.replace(hour=now.hour + 1, minute=0, second=0, microsecond=0)
+        else:
+            next_time = now.replace(minute=next_post_minute, second=0, microsecond=0)
 
-        for post_content in posts:
+        print(f"⏳ 現在時刻: {now.strftime('%Y-%m-%d %H:%M:%S')}, 次回投稿時刻: {next_time.strftime('%Y-%m-%d %H:%M:%S')}")
+
+        # 各アカウントで投稿（各アカウントからランダムな投稿内容を1つずつ投稿）
+        for client in yay_clients:
+            post_content = random.choice(get_time_based_posts())
             try:
-                client.create_post(post_content)
-                print(f'✅ 投稿成功: {post_content}')
-                time.sleep(random.randint(1200, 3600))  # 投稿間隔を20分〜1時間にランダム調整
+                response = client.create_post(post_content)
+                print(f"📢 投稿成功 ({client.email}) [{now.strftime('%Y-%m-%d %H:%M:%S')}]: {post_content} | Response: {response}")
             except yaylib.errors.HTTPError as e:
-                print(f"❌ 投稿エラー: {e}")
+                print(f"❌ 投稿エラー ({client.email}): {e}")
                 if "429" in str(e):
-                    wait_time = random.randint(600, 1800)
-                    print(f"🚨 429エラー（API制限）: {wait_time} 秒待機")
+                    wait_time = random.randint(300, 900)  # 5〜15分待機
+                    print(f"🚧 429エラー: {wait_time} 秒待機して再試行")
                     time.sleep(wait_time)
                 elif "403" in str(e):
-                    print("⚠️ 403エラー（BANまたは制限）: このアカウントを使用停止")
+                    print("⚠️ 403エラー: このアカウントを使用停止")
                     yay_clients.remove(client)
-                    break
                 elif "401" in str(e):
-                    print("⚠️ 401エラー（認証エラー）: 再ログインが必要")
+                    print("⚠️ 401エラー: 認証エラー")
                     yay_clients.remove(client)
-                    break
                 else:
-                    print("⚠️ その他のエラー: 投稿をスキップ")
+                    print("⚠️ その他のエラー発生")
                     continue
 
+        # 次の投稿までの待機時間を計算
+        sleep_time = (next_time - datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst)).total_seconds()
+        print(f"⏳ 次の投稿まで {int(sleep_time)} 秒待機")
+        time.sleep(sleep_time)
+
     except Exception as e:
-        print(f"❌ 致命的なエラー: {e}")
+        print(f"❌ 致命的なエラー発生: {e}")
         time.sleep(1800)  # 30分待機して再試行
