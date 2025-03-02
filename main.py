@@ -18,6 +18,8 @@ for account in account_list:
     if len(parts) == 2:
         accounts.append({'email': parts[0], 'password': parts[1]})
 
+print("取得したアカウント情報:", accounts)  # デバッグ用
+
 # 投稿内容（時間ごと）
 post_texts = {
     1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない"],
@@ -54,7 +56,12 @@ def get_time_based_post():
     now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst).hour
     if now == 0:
         now = 24  # 0時を24時に変換
-    
+
+    print(f"現在の時刻（JST）: {now} 時")  # デバッグ用
+    if now not in post_texts:
+        print(f"⚠️ post_texts に {now} 時のキーが存在しません。")
+        return "今の時間に合う投稿が見つかりません。"
+
     post = random.choice(post_texts[now])
 
     # 4回に1回、DM誘導文を追加
@@ -71,16 +78,19 @@ for account in accounts:
         client = yaylib.Client()
         client.login(account["email"], account["password"])
         yay_clients.append(client)
-        print(f"{account['email']} でログイン成功")
+        print(f"✅ {account['email']} でログイン成功")
     except Exception as e:
-        print(f"{account['email']} のログインに失敗: {e}")
+        print(f"❌ {account['email']} のログインに失敗: {e}")
+
+print(f"ログイン成功アカウント数: {len(yay_clients)}")  # デバッグ用
 
 # 🚀 **ビルド完了後すぐに1投稿**
 for client in yay_clients:
     try:
         first_post = get_time_based_post()
-        client.create_post(first_post)
-        print(f'✅ 初回投稿成功 ({client.email}): {first_post}')
+        print(f"初回投稿内容: {first_post}")  # デバッグ用
+        response = client.create_post(first_post)
+        print(f'✅ 初回投稿成功 ({client.email}): {response}')
     except Exception as e:
         print(f'❌ 初回投稿失敗 ({client.email}): {e}')
 
@@ -97,8 +107,9 @@ while True:
         
         for client in yay_clients:
             post_content = get_time_based_post()
-            client.create_post(post_content)
-            print(f'📢 投稿しました ({client.email}) [{now.strftime("%Y-%m-%d %H:%M:%S")}]: {post_content}')
+            print(f"📢 投稿予定内容: {post_content}")  # デバッグ用
+            response = client.create_post(post_content)
+            print(f'✅ 投稿成功 ({client.email}) [{now.strftime("%Y-%m-%d %H:%M:%S")}]: {response}')
 
         # 次の投稿時間まで待機
         next_time = now.replace(minute=next_post_minute, second=0, microsecond=0)
