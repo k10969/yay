@@ -18,9 +18,29 @@ for account in account_list:
     if len(parts) == 2:
         accounts.append({'email': parts[0], 'password': parts[1]})
 
+# ログイン処理
+yay_clients = []
+
+print(f"🌐 ログイン処理開始（{len(accounts)}アカウント）")
+
+for account in accounts:
+    try:
+        client = yaylib.Client()
+        client.login(account["email"], account["password"])
+        yay_clients.append(client)
+        print(f"✅ {account['email']} でログイン成功")
+    except Exception as e:
+        print(f"❌ {account['email']} のログインに失敗: {e}")
+
+print(f"✅ ログイン成功アカウント数: {len(yay_clients)}")
+
+if not yay_clients:
+    print("🚨 ログインできたアカウントがありません。スクリプトを終了します。")
+    exit(1)
+
 # 投稿内容（時間ごと）
 post_texts = {
-1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない", "誰か電話しない？", "コンビニ行きたい",
+    1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない", "誰か電話しない？", "コンビニ行きたい",
     "夜中のラーメンは最強", "眠れない人いる〜？", "そろそろ寝ないと", "明日起きれるかな…", "つーわぼ #いいねでこちゃ"],
 
 2: ["深夜組集合〜！", "もうそろそろ寝ないと", "YouTube見てたらこんな時間", "小腹すいたなぁ…",
@@ -96,13 +116,12 @@ post_texts = {
 # DM誘導文
 dm_text = " 、だれかDMしませんか。"
 
-# 時間帯に応じた投稿を取得（ランダムでDM誘導を追加）
+# 時間帯に応じた投稿を取得
 def get_time_based_post():
     now = datetime.now(jst).hour
     if now == 0:
         now = 24  # 0時を24時に変換
-
-    post = random.choice(post_texts[now])
+    post = random.choice(post_texts.get(now, ["つーわぼ #いいねでこちゃ"]))
 
     # 4回に1回、DM誘導文を追加
     if random.randint(1, 4) == 1:
@@ -110,66 +129,55 @@ def get_time_based_post():
 
     return post
 
-# ログイン処理
-yay_clients = []
-
-for account in accounts:
-    try:
-        client = yaylib.Client()
-        client.login(account["email"], account["password"])
-        yay_clients.append(client)
-        print(f"{account['email']} でログイン成功")
-    except Exception as e:
-        print(f"{account['email']} のログインに失敗: {e}")
-
 # 🚀 **ビルド完了後すぐに1投稿**
+print("🚀 初回投稿開始")
 for client in yay_clients:
     try:
         first_post = get_time_based_post()
+        print(f'📢 {client.email} が投稿: {first_post}')
         client.create_post(first_post)
-        print(f'✅ 初回投稿成功 ({client.email}): {first_post}')
+        print(f'✅ 初回投稿成功 ({client.email})')
     except Exception as e:
         print(f'❌ 初回投稿失敗 ({client.email}): {e}')
-
-# ⏳ **最初の投稿後に次の投稿タイミングまで待機**
-now = datetime.now(jst)
-next_minute = (now.minute // 15 + 1) * 15
-if next_minute == 60:
-    next_minute = 0
-    now += timedelta(hours=1)
-
-next_time = now.replace(minute=next_minute, second=0, microsecond=0)
-sleep_time = (next_time - datetime.now(jst)).total_seconds()
-print(f"⏳ 最初の投稿後、次の投稿まで {int(sleep_time)} 秒待機")
-time.sleep(sleep_time)
 
 # 🎯 **メインの投稿ループ（15分ごと）**
 while True:
     try:
         now = datetime.now(jst)
+        current_minute = now.minute
+
+        # 次の投稿タイミングを計算（0分, 15分, 30分, 45分）
+        next_post_minute = (current_minute // 15 + 1) * 15
+        if next_post_minute == 60:
+            next_post_minute = 0
+            next_hour = now.hour + 1
+        else:
+            next_hour = now.hour
 
         for client in yay_clients:
             post_content = get_time_based_post()
+            print(f'📢 {client.email} が投稿: {post_content}')
             client.create_post(post_content)
-            print(f'📢 投稿しました ({client.email}) [{now.strftime("%Y-%m-%d %H:%M:%S")}]: {post_content}')
+            print(f'✅ 投稿成功 ({client.email})')
 
-        # 次の投稿時間を計算
-        next_minute = (now.minute // 15 + 1) * 15
-        if next_minute == 60:
-            next_minute = 0
-            now += timedelta(hours=1)
-
-        next_time = now.replace(minute=next_minute, second=0, microsecond=0)
+        # 次の投稿時間をログに出力
+        next_time = now.replace(hour=next_hour, minute=next_post_minute, second=0, microsecond=0)
         sleep_time = (next_time - datetime.now(jst)).total_seconds()
+        print(f"⏳ 次の投稿予定: {next_time.strftime('%Y-%m-%d %H:%M:%S')}（{int(sleep_time)}秒後）")
         
-        print(f"⏳ 次の投稿まで {int(sleep_time)} 秒待機")
+        # 次の投稿時間まで待機
         time.sleep(sleep_time)
 
     except yaylib.errors.HTTPError as e:
-        if "429" in str(e):
+        error_msg = str(e)
+        if "429" in error_msg:
             wait_time = random.randint(300, 900)  # 5〜15分待機
             print(f"🚧 429エラー: {wait_time} 秒待機して再試行")
             time.sleep(wait_time)
         else:
-            print(f"⚠️ エラー発生: {e}")
+            print(f"⚠️ HTTPエラー発生: {e}")
             break  # 予期しないエラーなら停止
+
+    except Exception as e:
+        print(f"⚠️ 予期しないエラーが発生: {e}")
+        break  # 不明なエラーの場合は停止
