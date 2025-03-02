@@ -2,77 +2,85 @@ import yaylib
 import random
 import time
 import os
-from datetime import datetime, timedelta
-import pytz
-
-# 日本時間（JST）のタイムゾーン
-jst = pytz.timezone('Asia/Tokyo')
+from datetime import datetime
 
 # 環境変数からアカウント情報を取得
 account_list = os.getenv('YAY_ACCOUNTS', '').split(',')
 
-# ログイン情報リスト作成
+# ログイン情報のリスト作成
 accounts = []
 for account in account_list:
     parts = account.split(':')
     if len(parts) == 2:
         accounts.append({'email': parts[0], 'password': parts[1]})
 
-print("取得したアカウント情報:", accounts)  # デバッグ用
-
-# 投稿内容（時間ごと）
-post_texts = {
-    1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない"],
-    2: ["深夜組集合〜！", "もうそろそろ寝ないと"],
-    3: ["この時間起きてるのは少数派…？", "完全に夜更かししすぎた"],
-    4: ["おはようって言っていいのか微妙な時間", "早起き？それとも夜更かし？"],
-    5: ["朝が来た〜", "完全に寝不足"],
-    6: ["おはよ〜！今日も頑張ろっ", "ねむい…あと5分寝たい"],
-    7: ["まだちょっと眠い…", "朝ごはん食べた？"],
-    8: ["眠すぎ", "電車混んでる…"],
-    9: ["そろそろお腹すいてきたかも", "仕事中だ〜"],
-    10: ["ちょっと一息つこ", "みんななにしてるの〜？？"],
-    11: ["お昼ごはんどうしよ〜", "ランチ何にしようか迷う"],
-    12: ["ランチなう", "お昼ごはん美味しすぎ"],
-    13: ["午後の仕事or授業スタート！", "ランチ後って眠くなるよね"],
-    14: ["まだお昼の眠気が抜けない", "そろそろおやつの時間"],
-    15: ["おやつタイム〜", "あと少しで終業時間…"],
-    16: ["あと少しで仕事終わる！！さいこーー", "夕方の空って綺麗だよね"],
-    17: ["みんなおつかれさま！", "夕方のこの時間、好きかも"],
-    18: ["夜ご飯の時間だ〜！", "今日の夕飯は何だと思う？"],
-    19: ["夜ご飯食べ終わった？", "この時間はYouTubeかネトフリ見たくなる"],
-    20: ["夜のリラックスタイム", "そろそろお風呂入ろうかな"],
-    21: ["そろそろ寝る準備してる？", "今日の振り返り中"],
-    22: ["寝る前のリラックスタイム", "夜更かしする人〜？"],
-    23: ["そろそろ寝ようかな", "夜って色々考えちゃうよね"],
-    24: ["こんな時間まで起きてる人いる？", "そろそろ寝る準備しよ〜"]
+# 各時間帯の投稿リスト（1時間ごとに8個）
+hourly_posts = {
+    1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない", "誰か電話しない？", "コンビニ行きたい",
+        "夜中のラーメンは最強", "眠れない人いる〜？", "そろそろ寝ないと", "明日起きれるかな…"],
+    2: ["深夜組集合〜！", "もうそろそろ寝ないと", "YouTube見てたらこんな時間", "小腹すいたなぁ…",
+        "夜中に食べるお菓子は罪だけど美味い", "朝が来る前に寝るぞ！", "寝る前にストレッチしよ", "ラジオ聴いてる"],
+    3: ["この時間起きてるのは少数派…？", "完全に夜更かししすぎた", "3時って一番眠くなる時間…", "もう寝なきゃ…",
+        "夜の静けさって落ち着く", "SNS見てたら時間溶けた", "そろそろ寝落ちしそう", "夜中に考え事しちゃう…"],
+    4: ["おはようって言っていいのか微妙な時間", "早起き？それとも夜更かし？", "空が少し明るくなってきた",
+        "そろそろ朝の準備するか…", "こんな時間に起きてるの自分だけ？", "朝ごはん食べる人いる？", "眠すぎる…", "今日の予定考え中"],
+    5: ["朝が来た〜", "完全に寝不足", "眠いけど頑張る", "そろそろ朝ごはん食べようかな？", 
+        "早起きさんいる？", "今日も一日頑張ろう", "なんだかんだ夜更かししちゃった", "おはよう世界"],
+    6: ["おはよ〜！今日も頑張ろっ", "ねむい…あと5分寝たい", "朝ごはんはパン派？ごはん派？", "顔洗ったら少しスッキリ！", 
+        "もう少し布団にいたいなぁ…", "朝の空気って気持ちいい", "今日の服どうしよ〜", "学校or仕事ファイト🔥"],
+    7: ["まだちょっと眠い…", "朝ごはん食べた？", "今日の天気どうかな？", "みんな何時に起きるタイプ？", 
+        "朝の準備バタバタする", "通勤中〜～", "コーヒー飲んで目覚まそ", "今日も楽しい1日になりますように"],
+    8: ["眠すぎ", "電車混んでる…", "カフェでモーニングしてる", "職場ついた〜", 
+        "朝って時間経つの早いよね", "今日の予定なにかある？", "みんな頑張りすぎずにね", "休日が待ち遠しい…！"],
+    9: ["そろそろお腹すいてきたかも", "仕事中だ〜", "今日化粧ノリいい感じ", "朝のカフェって落ち着くよね", 
+        "集中しなきゃだけど眠くなるよね…", "適度に休憩も大事", "今日やることメモしよ", "お昼なに食べよ〜？"],
+    10: ["ちょっと一息つこ", "みんななにしてるの〜？？", "そろそろお昼の時間近づいてきたね", "眠くて頭まわらない", 
+         "集中モードに入ろうかな", "休憩に入ったのでカフェでリラックス中", "音楽聞きながらリラックス", "誰かと話したいな〜"],
+    11: ["お昼ごはんどうしよ〜", "ランチ何にしようか迷う", "お昼休みまであとちょっと…", "夜外食しようかな？", 
+         "誰か一緒にランチ行こ〜", "お昼に甘いもの食べたい", "午後もがんばるぞ", "お昼寝したくなる時間"],
+    12: ["ランチなう", "お昼ごはん美味しすぎ", "午後もがんばるぞー！！", "ちょっと眠くなってきた…", 
+         "ごはん食べたら元気出た😌", "みんな何食べた？", "デザート食べたい", "午後の予定ある人〜？"],
+    13: ["午後の仕事or授業スタート！", "ランチ後って眠くなるよね", "午後もがんばろ〜！", "コーヒー飲んで気合い入れよ",
+         "午後は何しようかな？", "あー、めんどくさいなぁ", "休憩時間が待ち遠しい…", "ちょっと散歩しようかな"],
+    14: ["まだお昼の眠気が抜けない", "そろそろおやつの時間", "午後の仕事やる気スイッチどこ？", "学校or仕事終わった人いる？",
+         "何か面白いことないかな〜", "音楽聞きながらリラックス", "みんな午後は何してるの？", "ちょっと眠気覚ましにストレッチ！"],
+    15: ["おやつタイム〜", "あと少しで終業時間…", "カフェに寄りたいな", "夕方の予定ある？", 
+         "午後の授業or会議、がんばろう！", "今日のニュースチェック中", "そろそろ疲れてきた", "ちょっと仮眠しよっかな"],
+    16: ["あと少しで仕事終わる！！さいこーー", "夕方の空って綺麗だよね", "今日の晩ごはん何にしよう？", "仕事帰りに寄り道しよっかな〜",
+         "そろそろお家に帰る準備", "疲れたけどあと少し！", "カフェでのんびり中", "お風呂入ってチルしたい🥺"],
+    17: ["みんなおつかれさま！", "夕方のこの時間、好きかも", "そろそろ帰ろう", "夕飯の準備しないと",
+         "誰かとご飯行きたいな〜", "家に帰ったら即ゴロゴロしたい", "暗くなるの早くなったなぁ…", "まだ仕事の人、がんばれ"],
+    18: ["夜ご飯の時間だ〜！", "今日の夕飯は何だと思う？", "仕事終わりのビール最高", "晩ごはん何食べた？"],
+    19: ["夜ご飯食べ終わった？", "この時間はYouTubeかネトフリ見たくなる", "のんびりタイム"],
+    20: ["夜のリラックスタイム", "そろそろお風呂入ろうかな", "一緒に寝る前のストレッチしよっか"],
+    21: ["そろそろ寝る準備してる？", "今日の振り返り中", "お風呂上がりのアイス最高"],
+    22: ["寝る前のリラックスタイム", "夜更かしする人〜？", "今日も1日お疲れさま"],
+    23: ["そろそろ寝ようかな", "夜って色々考えちゃうよね", "えち時間になってきたね", "気持ちいことしたいね"],
+    24: ["こんな時間まで起きてる人いる？", "そろそろ寝る準備しよ〜", "だれか電話しませんか", "楽しいことしよー"]
 }
 
-# DM誘導文
-dm_text = " 、だれかDMしませんか。"
+# 4回に1回、投稿の最後に付ける文章
+dm_message = " だれかDMしませんか、フォローもお願いします！"
 
-# 時間帯に応じた投稿を取得（ランダムでDM誘導を追加）
-def get_time_based_post():
-    now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst).hour
-    if now == 0:
-        now = 24  # 0時を24時に変換
+# 指定された時間帯の投稿リストからランダムに4つ選ぶ
+def get_time_based_posts():
+    now = datetime.now().hour
+    posts = hourly_posts.get(now, ["なにしてるの〜？💬", "ちょっとおしゃべりしたい💖"])
 
-    print(f"現在の時刻（JST）: {now} 時")  # デバッグ用
-    if now not in post_texts:
-        print(f"⚠️ post_texts に {now} 時のキーが存在しません。")
-        return "今の時間に合う投稿が見つかりません。"
+    if not posts:
+        print("⚠️ 投稿する内容がありません！デフォルトメッセージを使用します。")
+        return ["なにしてるの〜？💬"]
 
-    post = random.choice(post_texts[now])
+    selected_posts = random.sample(posts, min(4, len(posts)))
 
-    # 4回に1回、DM誘導文を追加
-    if random.randint(1, 4) == 1:
-        post += dm_text
+    for i in range(len(selected_posts)):
+        if random.randint(1, 4) == 1:
+            selected_posts[i] += dm_message
 
-    return post
+    return selected_posts
 
 # ログイン処理
 yay_clients = []
-
 for account in accounts:
     try:
         client = yaylib.Client()
@@ -82,50 +90,45 @@ for account in accounts:
     except Exception as e:
         print(f"❌ {account['email']} のログインに失敗: {e}")
 
-print(f"ログイン成功アカウント数: {len(yay_clients)}")  # デバッグ用
+# ログイン成功したアカウント数を確認
+if len(yay_clients) == 0:
+    print("⚠️ ログイン成功したアカウントがありません。処理を終了します。")
+    exit()
 
-# 🚀 **ビルド完了後すぐに1投稿**
-for client in yay_clients:
-    try:
-        first_post = get_time_based_post()
-        print(f"初回投稿内容: {first_post}")  # デバッグ用
-        response = client.create_post(first_post)
-        print(f'✅ 初回投稿成功 ({client.email}): {response}')
-    except Exception as e:
-        print(f'❌ 初回投稿失敗 ({client.email}): {e}')
-
-# 🎯 **メインの投稿ループ（15分ごと）**
+# メインの投稿ループ
 while True:
     try:
-        now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst)
-        current_minute = now.minute
+        client = random.choice(yay_clients)
+        posts = get_time_based_posts()
 
-        # 次の投稿タイミング（0分, 15分, 30分, 45分）を計算
-        next_post_minute = (current_minute // 15 + 1) * 15
-        if next_post_minute == 60:
-            next_post_minute = 0  # 次の時間に繰り越し
-        
-        for client in yay_clients:
-            post_content = get_time_based_post()
-            print(f"📢 投稿予定内容: {post_content}")  # デバッグ用
-            response = client.create_post(post_content)
-            print(f'✅ 投稿成功 ({client.email}) [{now.strftime("%Y-%m-%d %H:%M:%S")}]: {response}')
+        if not posts:
+            print("⚠️ 投稿する内容がないため、スキップします。")
+            time.sleep(900)
+            continue
 
-        # 次の投稿時間まで待機
-        next_time = now.replace(minute=next_post_minute, second=0, microsecond=0)
-        if next_post_minute == 0:
-            next_time += timedelta(hours=1)  # 0分なら次の時間に変更
-        
-        sleep_time = (next_time - datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst)).total_seconds()
-        
-        print(f"⏳ 次の投稿まで {int(sleep_time)} 秒待機")
-        time.sleep(sleep_time)
+        for post_content in posts:
+            try:
+                client.create_post(post_content)
+                print(f'✅ 投稿成功: {post_content}')
+                time.sleep(random.randint(1200, 3600))  # 投稿間隔を20分〜1時間にランダム調整
+            except yaylib.errors.HTTPError as e:
+                print(f"❌ 投稿エラー: {e}")
+                if "429" in str(e):
+                    wait_time = random.randint(600, 1800)
+                    print(f"🚨 429エラー（API制限）: {wait_time} 秒待機")
+                    time.sleep(wait_time)
+                elif "403" in str(e):
+                    print("⚠️ 403エラー（BANまたは制限）: このアカウントを使用停止")
+                    yay_clients.remove(client)
+                    break
+                elif "401" in str(e):
+                    print("⚠️ 401エラー（認証エラー）: 再ログインが必要")
+                    yay_clients.remove(client)
+                    break
+                else:
+                    print("⚠️ その他のエラー: 投稿をスキップ")
+                    continue
 
-    except yaylib.errors.HTTPError as e:
-        if "429" in str(e):
-            wait_time = random.randint(300, 900)  # 5〜15分待機
-            print(f"🚧 429エラー: {wait_time} 秒待機して再試行")
-            time.sleep(wait_time)
-        else:
-            print(f"⚠️ エラー発生: {e}")
-            break  # 予期しないエラーなら停止
+    except Exception as e:
+        print(f"❌ 致命的なエラー: {e}")
+        time.sleep(1800)  # 30分待機して再試行
