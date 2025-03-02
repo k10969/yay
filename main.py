@@ -5,13 +5,13 @@ import os
 from datetime import datetime, timedelta
 import pytz
 
-# 日本時間（JST）のタイムゾーンを設定
+# 日本時間（JST）のタイムゾーン
 jst = pytz.timezone('Asia/Tokyo')
 
 # 環境変数からアカウント情報を取得
 account_list = os.getenv('YAY_ACCOUNTS', '').split(',')
 
-# ログイン情報のリスト作成
+# ログイン情報リスト作成
 accounts = []
 for account in account_list:
     parts = account.split(':')
@@ -75,10 +75,18 @@ for account in accounts:
     except Exception as e:
         print(f"{account['email']} のログインに失敗: {e}")
 
-# メインの投稿ループ（15分ごと）
+# 🚀 **ビルド完了後すぐに1投稿**
+for client in yay_clients:
+    try:
+        first_post = get_time_based_post()
+        client.create_post(first_post)
+        print(f'✅ 初回投稿成功 ({client.email}): {first_post}')
+    except Exception as e:
+        print(f'❌ 初回投稿失敗 ({client.email}): {e}')
+
+# 🎯 **メインの投稿ループ（15分ごと）**
 while True:
     try:
-        # 日本時間の現在時刻を取得
         now = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst)
         current_minute = now.minute
 
@@ -87,11 +95,10 @@ while True:
         if next_post_minute == 60:
             next_post_minute = 0  # 次の時間に繰り越し
         
-        # 各アカウントで1投稿（内容はランダム）
         for client in yay_clients:
             post_content = get_time_based_post()
             client.create_post(post_content)
-            print(f'投稿しました ({client.email}) [{now.strftime("%Y-%m-%d %H:%M:%S")}]: {post_content}')
+            print(f'📢 投稿しました ({client.email}) [{now.strftime("%Y-%m-%d %H:%M:%S")}]: {post_content}')
 
         # 次の投稿時間まで待機
         next_time = now.replace(minute=next_post_minute, second=0, microsecond=0)
@@ -100,14 +107,14 @@ while True:
         
         sleep_time = (next_time - datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(jst)).total_seconds()
         
-        print(f"次の投稿まで {int(sleep_time)} 秒待機")
+        print(f"⏳ 次の投稿まで {int(sleep_time)} 秒待機")
         time.sleep(sleep_time)
 
     except yaylib.errors.HTTPError as e:
         if "429" in str(e):
             wait_time = random.randint(300, 900)  # 5〜15分待機
-            print(f"429エラー: {wait_time} 秒待機して再試行")
+            print(f"🚧 429エラー: {wait_time} 秒待機して再試行")
             time.sleep(wait_time)
         else:
-            print(f"エラー発生: {e}")
+            print(f"⚠️ エラー発生: {e}")
             break  # 予期しないエラーなら停止
