@@ -14,9 +14,9 @@ for account in account_list:
     if len(parts) == 2:
         accounts.append({'email': parts[0], 'password': parts[1]})
 
-# 各時間帯の投稿リスト（1時間ごとに8個）
-hourly_posts = {
-        1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない", "誰か電話しない？📞", "コンビニ行きたい🍫",
+# 投稿内容のリスト（1〜24時）
+post_texts = {
+    1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない", "誰か電話しない？📞", "コンビニ行きたい🍫",
         "夜中のラーメンは最強🍜", "眠れない人いる〜？", "そろそろ寝ないと💦", "明日起きれるかな…"],
     2: ["深夜組集合〜！", "もうそろそろ寝ないと😪", "YouTube見てたらこんな時間😱", "小腹すいたなぁ…",
         "夜中に食べるお菓子は罪だけど美味い", "朝が来る前に寝るぞ！", "寝る前にストレッチしよ🧘‍♀️", "ラジオ聴いてる📻"],
@@ -50,7 +50,7 @@ hourly_posts = {
          "そろそろお家に帰る準備🏡", "疲れたけどあと少し！", "カフェでのんびり中☕", "お風呂入りたい〜🛀"],
     17: ["おつかれさま〜✨", "夕方のこの時間、好きかも🌆", "そろそろ帰ろう🚃", "夕飯の準備しないと🍳",
          "誰かとご飯行きたいな〜", "家に帰ったら即ゴロゴロしたい😆", "暗くなるの早くなったなぁ…", "まだ仕事の人、がんばれ💪"],
-    18: ["夜ご飯の時間だ〜！🍚", "今日の夕飯はなににしよう", "仕事終わりのビール最高🍺", "晩ごはん何食べた？"],
+    18: ["夜ご飯の時間だ〜！🍚", "今日の夕飯は〇〇🍛", "仕事終わりのビール最高🍺", "晩ごはん何食べた？"],
     19: ["夜ご飯食べ終わった？", "この時間はYouTube見たくなる📱", "夜のカフェでのんびり中☕"],
     20: ["夜のリラックスタイム✨", "そろそろお風呂入ろうかな🛀", "寝る前のストレッチしよっかな🤸"],
     21: ["そろそろ寝る準備してる？", "今日の振り返り中📝", "お風呂上がりのアイス最高🍦"],
@@ -59,20 +59,22 @@ hourly_posts = {
     24: ["こんな時間まで起きてる人いる？", "そろそろ寝る準備しよ〜"]
 }
 
-# 4回に1回、投稿の最後に付ける文章
-dm_message = " だれかDMしませんか、。フォローもお願いします🙏🏻‎🤍"
+# DM誘導文
+dm_text = " 、DMしませんか？フォローもお願いします！"
 
-# 指定された時間帯の投稿リストからランダムに4つ選ぶ
-def get_time_based_posts():
+# 時間帯に応じた投稿を取得（ランダムでDM誘導を追加）
+def get_time_based_post():
     now = datetime.now().hour
-    posts = random.sample(hourly_posts[now], 4) if now in hourly_posts else ["なにしてるの〜？💬", "ちょっとおしゃべりしたい💖"]
+    if now == 0:
+        now = 24  # 0時を24時に変換
+    
+    post = random.choice(post_texts[now])
 
-    # 4回に1回の確率でDM誘導を追加
-    for i in range(len(posts)):
-        if random.randint(1, 4) == 1:
-            posts[i] += dm_message
+    # 4回に1回、DM誘導文を追加
+    if random.randint(1, 4) == 1:
+        post += dm_text
 
-    return posts
+    return post
 
 # ログイン処理
 yay_clients = []
@@ -82,22 +84,29 @@ for account in accounts:
         client = yaylib.Client()
         client.login(account["email"], account["password"])
         yay_clients.append(client)
+        print(f"{account['email']} でログイン成功")
     except Exception as e:
         print(f"{account['email']} のログインに失敗: {e}")
 
 # メインの投稿ループ
 while True:
     try:
-        client = random.choice(yay_clients)
-        posts = get_time_based_posts()
-
-        for post_content in posts:
+        # 各アカウントで投稿（内容はランダム）
+        for client in yay_clients:
+            post_content = get_time_based_post()
             client.create_post(post_content)
-            print(f'投稿しました: {post_content}')
-            time.sleep(900)
+            print(f'投稿しました ({client.email}): {post_content}')
+
+        # 15分（900秒）待機
+        delay = 900
+        print(f"次の投稿まで {delay} 秒待機")
+        time.sleep(delay)
 
     except yaylib.errors.HTTPError as e:
         if "429" in str(e):
-            time.sleep(random.randint(600, 1800))
+            wait_time = random.randint(600, 1800)  # 10〜30分待機
+            print(f"429エラー: {wait_time} 秒待機して再試行")
+            time.sleep(wait_time)
         else:
-            break
+            print(f"エラー発生: {e}")
+            break  # 予期しないエラーなら停止
