@@ -24,7 +24,7 @@ for account in accounts:
     try:
         client = yaylib.Client()
         client.login(account["email"], account["password"])
-        yay_clients.append(client)
+        yay_clients.append((client, account["email"]))  # client, email をペアで保存
         print(f"✅ {account['email']} でログイン成功")
     except Exception as e:
         print(f"❌ {account['email']} のログインに失敗: {e}")
@@ -98,14 +98,14 @@ def get_time_based_post():
     return post
 
 # 自動いいね・フォロー機能
-def auto_like_and_follow(client):
+def auto_like_and_follow(client, email):
     hashtags = ["#いいねでこちゃ", "#いいねでレター"]
     try:
         for tag in hashtags:
             posts = client.search_posts(tag)
             for post in posts:
                 client.like_post(post['id'])
-                print(f"👍 Liked post ({tag}): {post['id']}")
+                print(f"👍 {email} liked post ({tag}): {post['id']}")
 
         posts = client.search_posts("通話募集")
         for post in posts:
@@ -113,12 +113,12 @@ def auto_like_and_follow(client):
             if user.get('gender') == 'male':
                 client.like_post(post['id'])
                 client.follow_user(user['id'])
-                print(f"✅ Followed {user['username']}")
+                print(f"✅ {email} followed {user['username']}")
     except Exception as e:
-        print(f"❌ Error in auto_like_and_follow: {e}")
+        print(f"❌ {email} の auto_like_and_follow でエラー: {e}")
 
 # 自動返信機能
-def auto_reply(client):
+def auto_reply(client, email):
     try:
         chats = client.get_chats()
         for chat in chats:
@@ -126,28 +126,28 @@ def auto_reply(client):
                 sender_id = chat['sender_id']
                 reply_text = "はじめまして！インスタではなそ、@1316_21 これです！"
                 client.send_message(sender_id, reply_text)
-                print(f"📩 Sent message to {sender_id}")
+                print(f"📩 {email} sent message to {sender_id}")
     except Exception as e:
-        print(f"❌ Error in auto_reply: {e}")
+        print(f"❌ {email} の auto_reply でエラー: {e}")
 
 # 時間指定投稿
 def time_based_posting_loop():
     while True:
-        for client in yay_clients:
+        for client, email in yay_clients:
             try:
                 post = get_time_based_post()
                 client.create_post(post)
-                print(f"📢 {client.email} が投稿: {post}")
+                print(f"📢 {email} が投稿: {post}")
             except Exception as e:
-                print(f"❌ 投稿エラー ({client.email}): {e}")
+                print(f"❌ 投稿エラー ({email}): {e}")
         time.sleep(3600)  # 1時間ごとに投稿
 
 # 自動アクション（いいね・フォロー・返信）のループ
 def auto_action_loop():
     while True:
-        for client in yay_clients:
-            auto_like_and_follow(client)
-            auto_reply(client)
+        for client, email in yay_clients:
+            auto_like_and_follow(client, email)
+            auto_reply(client, email)
         time.sleep(600)  # 10分ごとに実行
 
 # スレッドを開始
