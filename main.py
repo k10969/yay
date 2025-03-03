@@ -7,10 +7,9 @@ from datetime import datetime, timedelta
 import pytz
 
 # --- 共通設定 ---
-# 日本時間（JST）のタイムゾーン
 jst = pytz.timezone('Asia/Tokyo')
 
-# 環境変数からアカウント情報を取得（"email:password,email:password,..."）
+# 環境変数からアカウント情報を取得
 account_list = os.getenv('YAY_ACCOUNTS', '').split(',')
 accounts = []
 for account in account_list:
@@ -18,7 +17,7 @@ for account in account_list:
     if len(parts) == 2:
         accounts.append({'email': parts[0], 'password': parts[1]})
 
-# ログイン処理（各アカウントで一度だけログイン）
+# ログイン処理
 yay_clients = []
 print(f"🌐 ログイン処理開始（{len(accounts)}アカウント）")
 for account in accounts:
@@ -30,13 +29,11 @@ for account in accounts:
     except Exception as e:
         print(f"❌ {account['email']} のログインに失敗: {e}")
 
-print(f"✅ ログイン成功アカウント数: {len(yay_clients)}")
 if not yay_clients:
     print("🚨 ログインできたアカウントがありません。終了します。")
     exit(1)
 
-# --- 時間指定投稿機能 ---
-# 各時間帯の投稿内容（各時間帯につき候補は8個以上推奨）
+# --- 投稿テキストの設定 ---
 post_texts = {
     1: ["もう1時！？時間早すぎ…", "深夜のネットサーフィンが止まらない", "誰か電話しない？", "コンビニ行きたい",
         "夜中のラーメンは最強", "眠れない人いる〜？", "そろそろ寝ないと", "明日起きれるかな…", "つーわぼ #いいねでこちゃ"],
@@ -88,10 +85,9 @@ post_texts = {
          "誰かと話したくなる時間", "夜更かししすぎたかも…", "気づいたらこんな時間", "そろそろ夢の中へ…", "つーわぼ #いいねでこちゃ"]
 }
 
-# DM誘導文（投稿の最後に追加する文）
 dm_text = " 、だれかDMしませんか。"
 
-# 時間帯に応じた投稿を取得（DM誘導文を4回に1回追加）
+# 時間帯に応じた投稿を取得
 def get_time_based_post():
     now = datetime.now(jst).hour
     if now == 0:
@@ -101,33 +97,28 @@ def get_time_based_post():
         post += dm_text
     return post
 
-# --- 自動いいね・フォロー・自動返信機能 ---
-
 # 自動いいね・フォロー機能
-def auto_like_and_follow():
-    # いいねする対象のハッシュタグ
+def auto_like_and_follow(client):
     hashtags = ["#いいねでこちゃ", "#いいねでレター"]
-    # 「通話募集」を含む投稿の場合、男性ならいいね＆フォローする
     try:
-        # ハッシュタグを含む投稿にいいね
         for tag in hashtags:
             posts = client.search_posts(tag)
             for post in posts:
                 client.like_post(post['id'])
-                print(f"Liked post with tag {tag}: {post['id']}")
-        # 「通話募集」を含む投稿を検索
+                print(f"👍 Liked post ({tag}): {post['id']}")
+
         posts = client.search_posts("通話募集")
         for post in posts:
             user = client.get_user(post['user_id'])
             if user.get('gender') == 'male':
                 client.like_post(post['id'])
                 client.follow_user(user['id'])
-                print(f"Liked and followed {user['username']}")
+                print(f"✅ Followed {user['username']}")
     except Exception as e:
-        print(f"Error in auto_like_and_follow: {e}")
+        print(f"❌ Error in auto_like_and_follow: {e}")
 
 # 自動返信機能
-def auto_reply():
+def auto_reply(client):
     try:
         chats = client.get_chats()
         for chat in chats:
@@ -135,78 +126,34 @@ def auto_reply():
                 sender_id = chat['sender_id']
                 reply_text = "はじめまして！インスタではなそ、@1316_21 これです！"
                 client.send_message(sender_id, reply_text)
-                print(f"Sent message to {sender_id}")
+                print(f"📩 Sent message to {sender_id}")
     except Exception as e:
-        print(f"Error in auto_reply: {e}")
+        print(f"❌ Error in auto_reply: {e}")
 
-# --- メインループ用スレッド定義 ---
+# 時間指定投稿
 def time_based_posting_loop():
-    # 初回投稿（ビルド完了後すぐ）
-    print("🚀 初回投稿開始")
-    for client in yay_clients:
-        try:
-            first_post = get_time_based_post()
-            print(f'📢 {client.email} が初回投稿: {first_post}')
-            client.create_post(first_post)
-            print(f'✅ 初回投稿成功 ({client.email})')
-        except Exception as e:
-            print(f'❌ 初回投稿失敗 ({client.email}): {e}')
-    # 次の投稿タイミングまで待機
-    now = datetime.now(jst)
-    next_post_minute = (now.minute // 15 + 1) * 15
-    if next_post_minute == 60:
-        next_post_minute = 0
-        next_hour = now.hour + 1
-    else:
-        next_hour = now.hour
-    next_time = now.replace(hour=next_hour, minute=next_post_minute, second=0, microsecond=0)
-    sleep_time = (next_time - datetime.now(jst)).total_seconds()
-    print(f"⏳ 初回投稿後、次の投稿まで {int(sleep_time)} 秒待機")
-    time.sleep(sleep_time)
-    
-    # メインループ：15分ごとに各アカウントで投稿
-    while True:
-        now = datetime.now(jst)
-        current_minute = now.minute
-        next_post_minute = (current_minute // 15 + 1) * 15
-        if next_post_minute == 60:
-            next_post_minute = 0
-            next_hour = now.hour + 1
-        else:
-            next_hour = now.hour
-        for client in yay_clients:
-            try:
-                post_content = get_time_based_post()
-                print(f'📢 {client.email} が投稿: {post_content}')
-                client.create_post(post_content)
-                print(f'✅ 投稿成功 ({client.email})')
-            except Exception as e:
-                print(f'❌ 投稿エラー ({client.email}): {e}')
-        next_time = now.replace(hour=next_hour, minute=next_post_minute, second=0, microsecond=0)
-        sleep_time = (next_time - datetime.now(jst)).total_seconds()
-        print(f"⏳ 次の投稿予定: {next_time.strftime('%Y-%m-%d %H:%M:%S')}（{int(sleep_time)}秒後）")
-        time.sleep(sleep_time)
-
-def auto_actions_loop():
-    # このループは1分ごとに自動いいね・フォロー・自動返信を実行
     while True:
         for client in yay_clients:
             try:
-                auto_like_and_follow()  # いいね・フォロー
-                auto_reply()            # 自動返信
+                post = get_time_based_post()
+                client.create_post(post)
+                print(f"📢 {client.email} が投稿: {post}")
             except Exception as e:
-                print(f"Auto action error ({client.email}): {e}")
-        time.sleep(60)
+                print(f"❌ 投稿エラー ({client.email}): {e}")
+        time.sleep(3600)  # 1時間ごとに投稿
 
-# --- メイン ---
-import threading
+# 自動アクション（いいね・フォロー・返信）のループ
+def auto_action_loop():
+    while True:
+        for client in yay_clients:
+            auto_like_and_follow(client)
+            auto_reply(client)
+        time.sleep(600)  # 10分ごとに実行
 
-t_posting = threading.Thread(target=time_based_posting_loop, daemon=True)
-t_actions = threading.Thread(target=auto_actions_loop, daemon=True)
+# スレッドを開始
+threading.Thread(target=time_based_posting_loop, daemon=True).start()
+threading.Thread(target=auto_action_loop, daemon=True).start()
 
-t_posting.start()
-t_actions.start()
-
-# メインスレッドはずっと待機
+# メインスレッドを維持
 while True:
-    time.sleep(60)
+    time.sleep(1)
